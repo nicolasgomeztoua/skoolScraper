@@ -33,7 +33,6 @@
     "zod": "^3.24.3"
   },
   "devDependencies": {
-    "@types/puppeteer": "^7.0.4",
     "ts-node-dev": "^2.0.0"
   }
 }

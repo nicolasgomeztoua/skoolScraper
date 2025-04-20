@@ -24,7 +24,7 @@ export class SkoolScraper {
 
   async initialize(): Promise<void> {
     this.browser = await puppeteer.launch({
-      headless: 'new',
+      headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
