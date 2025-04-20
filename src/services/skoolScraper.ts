@@ -178,7 +178,7 @@ export class SkoolScraper {
         await this.page.waitForNetworkIdle({ idleTime: 1000, timeout: 5000 });
       } catch (e) {
         console.log('Network idle wait timed out, proceeding with fixed wait.');
-        await this.page.waitForTimeout(2000);
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
       const newHeight = await this.page.evaluate('document.body.scrollHeight');
       if (newHeight === lastHeight && postsAddedInThisScroll === 0) {
@@ -186,7 +186,7 @@ export class SkoolScraper {
         break;
       }
       lastHeight = newHeight;
-      await this.page.waitForTimeout(500);
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     console.log(`Finished scraping. Total posts collected: ${scrapedPosts.length}`);
