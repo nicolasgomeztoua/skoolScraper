@@ -162,12 +162,10 @@ export async function generatePostWorkflow() {
         ];
 
         // 6. Save the generated post to the new sheet
-        // We need to wrap the single row in another array for saveToSheet
+        // We need to wrap the single row in another array for the service method
         console.log(`Saving generated post to sheet '${generatedSheetName}'...`);
-        // Use a generic type for saveToSheet or adapt mapPostToRowArray
-        // For now, casting to any to bypass strict type checking for the single row.
-        // A dedicated function or type check would be better.
-        await sheetDbService.saveToSheet([generatedPostRow] as any, generatedSheetName);
+        // Use the new method designed for pre-formatted data
+        await sheetDbService.saveGeneratedData([generatedPostRow], generatedSheetName);
 
         // 7. Mark the original post as 'Processed'
         console.log(`Updating status of original post ID '${selectedPostId}' to 'Processed' in sheet '${communityName}'...`);

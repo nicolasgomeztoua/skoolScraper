@@ -122,6 +122,56 @@ export class SheetDbService {
     }
   }
 
+  // NEW: Save pre-formatted generated data rows to a specific sheet via Apps Script
+  async saveGeneratedData(generatedDataRows: any[][], sheetName: string): Promise<void> {
+    if (generatedDataRows.length === 0) {
+      console.log(`No generated data rows to add to sheet '${sheetName}'.`);
+      return;
+    }
+
+    // Data is already formatted as a 2D array
+    const dataPayload = generatedDataRows;
+
+    // Construct the URL with parameters
+    const targetUrl = this.appsScriptUrl;
+    const params = {
+      action: 'saveData',
+      sheet: sheetName
+    };
+
+    try {
+      console.log(`Attempting to send ${dataPayload.length} generated rows to sheet '${sheetName}' via Apps Script...`);
+      // Use the same POST request structure as saveToSheet, but with pre-formatted data
+      const response = await axios.post(targetUrl, 
+        { data: dataPayload }, // Send pre-formatted data in { data: [...] }
+        {
+          params: params,
+          headers: { 'Content-Type': 'application/json' }
+         }
+      );
+
+      if (response.data && typeof response.data.created === 'number') {
+        console.log(`Apps Script reported adding ${response.data.created} generated rows to sheet '${sheetName}'.`);
+      } else if (response.data && response.data.error) {
+         console.error(`Apps Script reported an error saving generated data to sheet '${sheetName}': ${response.data.error}`);
+         throw new Error(`Apps Script error saving generated data: ${response.data.error}`);
+      } else {
+        console.warn(`Unexpected response format from Apps Script saveData (generated) for sheet '${sheetName}':`, response.data);
+      }
+    } catch (error: any) {
+      console.error(`Error saving generated data to sheet '${sheetName}' via Apps Script:`);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('Status:', error.response.status);
+        console.error('Data:', error.response.data);
+      } else if (error.message.includes('Apps Script error saving generated data')) {
+        // Error already logged
+      } else {
+        console.error(error.message);
+      }
+      throw new Error(`Failed to save generated data to sheet '${sheetName}' via Apps Script.`);
+    }
+  }
+
   // Fetch all data rows from a specific sheet via Apps Script
   async getSheetData(sheetName: string): Promise<any[][]> {
     console.log(`Fetching all data from sheet '${sheetName}' via Apps Script...`);
