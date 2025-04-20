@@ -1,17 +1,18 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { CommunityPost, ProcessedPost } from '../types';
-import { GEMINI_API_KEY } from '../config';
+import { GoogleGenAI } from "@google/genai";
+import { CommunityPost, ProcessedPost } from "../types";
+import { GEMINI_API_KEY } from "../config";
 
 export class GeminiService {
-  private genAI: GoogleGenerativeAI;
-  private model: any;
+  private genAI: GoogleGenAI;
 
   constructor() {
-    this.genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+    this.genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
   }
 
+
   async processPost(post: CommunityPost): Promise<ProcessedPost> {
+    const modelIdentifier = "gemini-2.5-pro-preview-03-25";
+
     try {
       const prompt = `
         Analyze the following community post and extract the problem being discussed.
@@ -35,51 +36,67 @@ export class GeminiService {
         }
       `;
 
-      const result = await this.model.generateContent(prompt);
-      const responseText = result.response.text();
+      const result = await this.genAI.models.generateContent({
+          model: modelIdentifier,
+          contents: prompt
+      });
       
-      // Extract JSON from response
-      const jsonStr = responseText.match(/\{[\s\S]*\}/)?.[0] || '{}';
+      const response = result;
+      const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+      const jsonStr = responseText.match(/\{[\s\S]*\}/)?.[0] || "{}";
       const parsedResponse = JSON.parse(jsonStr);
-      
+
       return {
-        id: post.id,
+        sheetId: post.id,
         originalContent: post.content,
-        problemIdentified: parsedResponse.problemIdentified || 'No problem identified',
-        potentialSolution: parsedResponse.potentialSolution || undefined,
+        problemIdentified:
+          parsedResponse.problemIdentified || "No problem identified",
+        suggestedSolution: parsedResponse.potentialSolution || undefined,
         tags: parsedResponse.tags || [],
         category: parsedResponse.category || undefined,
+        authorName: post.author,
+        postTimestamp: post.timestamp,
+        postUrl: post.url,
+        communityUrl: post.communityUrl,
       };
     } catch (error) {
-      console.error('Error processing post with Gemini AI:', error);
+      console.error(`Error processing post with Gemini AI (Model: ${modelIdentifier}):`, error);
       return {
-        id: post.id,
+        sheetId: post.id,
         originalContent: post.content,
-        problemIdentified: 'Error processing with AI',
+        problemIdentified: "Error processing with AI",
+        authorName: post.author,
+        postTimestamp: post.timestamp,
+        postUrl: post.url,
+        communityUrl: post.communityUrl,
       };
     }
   }
 
   async processBatch(posts: CommunityPost[]): Promise<ProcessedPost[]> {
     const processedPosts: ProcessedPost[] = [];
-    
+
     for (const post of posts) {
       try {
         const processedPost = await this.processPost(post);
         processedPosts.push(processedPost);
-        
-        // Add a short delay between API calls to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (error) {
-        console.error(`Error processing post ${post.id}:`, error);
+        console.error(`Failed to process batch item for post ${post.id}. See previous error.`);
         processedPosts.push({
-          id: post.id,
+          sheetId: post.id,
           originalContent: post.content,
-          problemIdentified: 'Error processing with AI',
+          problemIdentified: "Error processing batch item",
+          authorName: post.author,
+          postTimestamp: post.timestamp,
+          postUrl: post.url,
+          communityUrl: post.communityUrl,
         });
       }
     }
-    
+
     return processedPosts;
   }
-} 
+}

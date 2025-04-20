@@ -1,7 +1,8 @@
-import { validateConfig, SKOOL_COMMUNITY_URLS } from './config';
+import './env'; // Import to initialize and validate env vars early
+import { SKOOL_COMMUNITY_URLS } from './config'; // Import the URLs
 import { SkoolScraper } from './services/skoolScraper';
 import { GeminiService } from './services/geminiService';
-import { GoogleSheetsService } from './services/googleSheetsService';
+import { SheetDbService } from './services/sheetDbService'; // Import SheetDbService
 
 // Set limit for posts to scrape per community
 const POST_LIMIT_PER_COMMUNITY = 20;
@@ -9,16 +10,14 @@ const POST_LIMIT_PER_COMMUNITY = 20;
 async function main() {
   const scraper = new SkoolScraper();
   const geminiService = new GeminiService();
-  const sheetsService = new GoogleSheetsService();
+  const sheetDbService = new SheetDbService(); // Instantiate SheetDbService
   
   try {
-    // Validate environment variables
-    validateConfig();
-    console.log('Configuration validated');
+    // Environment variables are validated upon import of './env'
+    console.log('Configuration validated (via env.ts)');
     
-    // Initialize the Google Sheet (once)
-    await sheetsService.initializeSheet();
-    console.log('Google Sheet initialized');
+    // No Sheet initialization needed for SheetDB
+    // console.log('Google Sheet initialized'); 
     
     // Initialize the browser (once)
     await scraper.initialize();
@@ -53,8 +52,9 @@ async function main() {
         const processedPosts = await geminiService.processBatch(posts);
         console.log(`Processed ${processedPosts.length} posts with Gemini AI`);
         
-        // Save processed posts to Google Sheet
-        await sheetsService.saveToSheet(processedPosts);
+        // Save processed posts to SheetDB
+        console.log('Saving data to SheetDB...');
+        await sheetDbService.saveToSheet(processedPosts); // Use SheetDbService
         
       } catch (communityError) {
         console.error(`❌ Failed to process community ${communityUrl}:`, communityError);

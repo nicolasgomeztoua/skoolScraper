@@ -2,9 +2,25 @@ import puppeteer, { Browser, Page } from 'puppeteer';
 import { CommunityPost } from '../types';
 import { SKOOL_EMAIL, SKOOL_PASSWORD } from '../config';
 
+// CSS Selectors (Updated based on inspection)
+const SELECTORS = {
+  // Using partial class matching based on inspection
+  postContainer: 'div[class*="PostItemCardContent-"]',
+  authorName: 'span[class*="UserNameText-"] span', // Target inner span for text
+  timestamp: 'div[class*="PostTimeContent-"]',
+  content: 'div[class*="ContentPreviewWrapper-"]',
+  // Base selector for the link element, href needs dynamic community slug
+  // We look for an anchor tag starting with the community slug, having a specific class prefix,
+  // and containing the title wrapper div to distinguish it from other links.
+  postLinkSelectorTemplate: 'a[href^="/{COMMUNITY_SLUG}/"][class*="ChildrenLink-"]:has(div[class*="TitleWrapper"])',
+  // Selector for the feed container itself (verify this on the page, might need adjustment)
+  feedContainer: 'div[role="list"]', // Example, a common pattern for lists
+};
+
 export class SkoolScraper {
   private browser: Browser | null = null;
   private page: Page | null = null;
+  private communityUrl: string | null = null; // Store communityUrl for context
 
   async initialize(): Promise<void> {
     this.browser = await puppeteer.launch({
@@ -51,77 +67,116 @@ export class SkoolScraper {
   async navigateToCommunity(communityUrl: string): Promise<void> {
     if (!this.page) throw new Error('Browser not initialized');
     
+    this.communityUrl = communityUrl; // Store for later use
+    console.log(`Navigating to community: ${communityUrl}`);
     try {
-      // Use the provided communityUrl
-      await this.page.goto(communityUrl, { waitUntil: 'networkidle2' });
-      console.log(`Navigated to: ${communityUrl}`);
-      // Wait for community content to load
-      await this.page.waitForSelector('.post-card, .feed-item', { timeout: 30000 });
-      console.log(`Content loaded for: ${communityUrl}`);
+      await this.page.goto(communityUrl, { waitUntil: 'networkidle0', timeout: 60000 });
+      // Wait for the *new* post container selector to ensure the main feed has loaded
+      await this.page.waitForSelector(SELECTORS.postContainer, { timeout: 30000 });
+      console.log('Successfully navigated to community and found post containers.');
     } catch (error) {
       console.error(`Error navigating to community ${communityUrl}:`, error);
-      throw error; // Re-throw error to be handled by the main loop
+      // Try taking a screenshot for debugging
+      try {
+        await this.page.screenshot({ path: 'error_navigate_community.png', fullPage: true });
+        console.log('Screenshot saved as error_navigate_community.png');
+      } catch (screenshotError) {
+        console.error('Failed to take screenshot:', screenshotError);
+      }
+      throw new Error(`Failed to navigate to community page or find initial posts: ${communityUrl}. Timeout or selector error.`);
     }
   }
 
   async scrapePosts(limit: number = 20): Promise<CommunityPost[]> {
-    if (!this.page) throw new Error('Browser not initialized');
-    
-    try {
-      // This selector needs to be adjusted based on Skool's actual DOM structure
-      const postSelector = '.post-card, .feed-item'; 
-      await this.page.waitForSelector(postSelector);
-      
-      // Scroll to load more posts if needed
-      let currentPostCount = 0;
-      while (currentPostCount < limit) {
-        const posts = await this.page.$$(postSelector);
-        currentPostCount = posts.length;
-        
-        if (currentPostCount >= limit) break;
-        
-        // Scroll down to load more posts
-        await this.page.evaluate(() => {
-          window.scrollTo(0, document.body.scrollHeight);
-        });
-        
-        // Wait for possible new posts to load
-        await this.page.waitForTimeout(2000);
-        
-        // Check if we've loaded new posts
-        const newPostCount = (await this.page.$$(postSelector)).length;
-        if (newPostCount === currentPostCount) {
-          // No new posts loaded, we've reached the end
-          break;
+    if (!this.page || !this.communityUrl) throw new Error('Browser not initialized or community URL not set');
+    const communityUrl = this.communityUrl;
+
+    console.log(`Scraping posts from ${communityUrl}, limit: ${limit}`);
+    const scrapedPosts: CommunityPost[] = [];
+    const processedPostIds = new Set<string>();
+    let lastHeight = await this.page.evaluate('document.body.scrollHeight');
+    const communityName = communityUrl.split('/').pop() || '';
+
+    const postLinkSelector = `${SELECTORS.postLinkSelectorTemplate.replace('{COMMUNITY_SLUG}', communityName)}`;
+
+    while (scrapedPosts.length < limit) {
+      console.log(`Current post count: ${scrapedPosts.length}. Checking for new posts...`);
+      const postElements = await this.page.$$(SELECTORS.postContainer);
+      console.log(`Found ${postElements.length} post elements on the page.`);
+
+      let postsAddedInThisScroll = 0;
+
+      for (const postElement of postElements) {
+        let postId: string | null = null; // Initialize postId for error logging
+        try {
+          const linkElement = await postElement.$(postLinkSelector);
+          // Use type assertion within evaluate for href
+          const link = linkElement ? await linkElement.evaluate((el: Element) => (el as HTMLAnchorElement).href) : null;
+
+          if (!link || processedPostIds.has(link)) {
+            continue;
+          }
+
+          postId = link; // Assign after check
+
+          const authorElement = await postElement.$(SELECTORS.authorName);
+          // Use type assertion within evaluate for textContent
+          const authorName = authorElement ? await authorElement.evaluate((el: Element) => (el as HTMLElement).textContent?.trim()) : 'Unknown Author';
+
+          const timeElement = await postElement.$(SELECTORS.timestamp);
+          // Use type assertion within evaluate for textContent
+          const rawTimestamp = timeElement ? await timeElement.evaluate((el: Element) => (el as HTMLElement).textContent?.trim()) : 'Unknown Time';
+          const timestamp = rawTimestamp?.replace(/•.*$/, '').trim() || 'Unknown Time';
+
+          const contentElement = await postElement.$(SELECTORS.content);
+          // Use type assertion within evaluate for textContent
+          const content = contentElement ? await contentElement.evaluate((el: Element) => (el as HTMLElement).textContent?.trim()) : '';
+
+          scrapedPosts.push({
+            id: postId,
+            communityUrl: communityUrl,
+            author: authorName || 'Unknown Author',
+            timestamp: timestamp || 'Unknown Time',
+            content: content || '',
+            url: link
+          });
+          processedPostIds.add(postId);
+          postsAddedInThisScroll++;
+          // console.log(`Added post: ${postId} (Total: ${scrapedPosts.length})`); // Reduced console noise
+
+          if (scrapedPosts.length >= limit) {
+            console.log(`Reached post limit: ${limit}`);
+            break;
+          }
+        } catch (error) {
+          console.error(`Error processing a post element (ID: ${postId ?? 'unknown'}):`, error);
         }
       }
-      
-      // Extract post data
-      const posts = await this.page.evaluate((selector: string) => {
-        const postElements = Array.from(document.querySelectorAll(selector));
-        return postElements.map((post) => {
-          // These selectors need to be adjusted based on Skool's actual DOM structure
-          const contentEl = post.querySelector('.post-content, .content');
-          const authorEl = post.querySelector('.author-name, .username');
-          const timestampEl = post.querySelector('.timestamp, .date');
-          const idAttr = post.getAttribute('data-post-id') || post.getAttribute('id');
-          const urlEl = post.querySelector('a.post-link') as HTMLAnchorElement;
-          
-          return {
-            id: idAttr || String(Math.random()),
-            content: contentEl ? contentEl.textContent?.trim() || '' : '',
-            author: authorEl ? authorEl.textContent?.trim() || '' : '',
-            timestamp: timestampEl ? timestampEl.textContent?.trim() || '' : '',
-            url: urlEl ? urlEl.href : undefined,
-          };
-        });
-      }, postSelector);
-      
-      return posts.slice(0, limit) as CommunityPost[];
-    } catch (error) {
-      console.error('Error scraping posts:', error);
-      return [];
+
+      if (scrapedPosts.length >= limit) {
+        break;
+      }
+
+      // Scroll down
+      console.log('Scrolling down to load more posts...');
+      await this.page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+      try {
+        await this.page.waitForNetworkIdle({ idleTime: 1000, timeout: 5000 });
+      } catch (e) {
+        console.log('Network idle wait timed out, proceeding with fixed wait.');
+        await this.page.waitForTimeout(2000);
+      }
+      const newHeight = await this.page.evaluate('document.body.scrollHeight');
+      if (newHeight === lastHeight && postsAddedInThisScroll === 0) {
+        console.log('No new posts loaded after scroll and wait. Assuming end of feed.');
+        break;
+      }
+      lastHeight = newHeight;
+      await this.page.waitForTimeout(500);
     }
+
+    console.log(`Finished scraping. Total posts collected: ${scrapedPosts.length}`);
+    return scrapedPosts.slice(0, limit);
   }
 
   async close(): Promise<void> {

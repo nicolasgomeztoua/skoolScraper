@@ -3,16 +3,21 @@ export interface CommunityPost {
   content: string;
   author: string;
   timestamp: string;
-  url?: string;
+  communityUrl: string;
+  url: string;
 }
 
 export interface ProcessedPost {
-  id: string;
-  originalContent: string;
+  sheetId: string;
   problemIdentified: string;
-  potentialSolution?: string;
+  originalContent: string;
+  suggestedSolution?: string;
   tags?: string[];
   category?: string;
+  authorName?: string;
+  postTimestamp?: string;
+  postUrl?: string;
+  communityUrl?: string;
 }
 
 export interface SkoolConfig {
@@ -30,4 +35,8 @@ export interface SheetData {
   category?: string;
   status?: string;
   timestamp: string;
+  authorName?: string;
+  postTimestamp?: string;
+  postUrl?: string;
+  communityUrl?: string;
 } 
