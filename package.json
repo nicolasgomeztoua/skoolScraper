@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "start": "ts-node src/index.ts",
+    "start": "node dist/server.js",
     "build": "tsc",
-    "dev": "ts-node-dev --respawn src/index.ts",
+    "dev": "ts-node-dev --respawn src/server.ts",
     "test:login": "ts-node src/testLogin.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -21,9 +21,11 @@
   "description": "A tool to scrape skool.com community posts, process them with Gemini AI, and store results in Google Sheets.",
   "dependencies": {
     "@google/genai": "^0.9.0",
+    "@types/express": "^5.0.1",
     "@types/node": "^20.9.0",
     "axios": "^1.6.0",
     "dotenv": "^16.3.1",
+    "express": "^5.1.0",
     "puppeteer": "^21.5.0",
     "ts-node": "^10.9.1",
     "typescript": "^5.2.2",

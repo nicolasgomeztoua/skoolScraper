@@ -12,11 +12,11 @@ export const SKOOL_COMMUNITY_URLS: string[] = env.SKOOL_COMMUNITY_URLS
 
 // API Keys
 export const GEMINI_API_KEY = env.GEMINI_API_KEY;
+export const API_KEY = env.API_KEY; // Export the generic API key
 
-// SheetDB API Endpoint
-export const SHEETDB_API_ENDPOINT = env.SHEETDB_API_ENDPOINT;
-export const SHEETDB_AUTH_TOKEN = env.SHEETDB_AUTH_TOKEN;
+// Replace SheetDB exports with Apps Script URL export
+export const APPS_SCRIPT_WEB_APP_URL = env.APPS_SCRIPT_WEB_APP_URL;
 
-// Removed Google Sheet related exports
+// Removed Google Sheet related exports (ensure these are truly gone or updated if needed elsewhere)
 
 // The old validateConfig function is no longer needed as validation happens in env.ts 

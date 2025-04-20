@@ -19,9 +19,11 @@ const envSchema = z.object({
   // API Keys and IDs
   GEMINI_API_KEY: z.string().min(10, { message: "Invalid Gemini API Key format" }),
   
-  // SheetDB API Endpoint
-  SHEETDB_API_ENDPOINT: z.string().url({ message: "Invalid SheetDB API Endpoint URL" }),
-  SHEETDB_AUTH_TOKEN: z.string().min(10, { message: "SheetDB Auth Token seems too short" }),
+  // Google Apps Script Web App URL
+  APPS_SCRIPT_WEB_APP_URL: z.string().url({ message: "Invalid Apps Script Web App URL" }),
+  
+  // General API Key for securing endpoints
+  API_KEY: z.string().min(10, { message: "API Key seems too short" }),
 });
 
 // Validate process.env against the schema

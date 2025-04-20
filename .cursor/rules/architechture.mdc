@@ -1,0 +1,95 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Cursor Rules & Project Architecture
+
+This document outlines the architecture, conventions, and workflows for the Community Scraper project.
+
+## Overview
+
+The project scrapes posts from specified Skool communities, processes them using the Gemini AI API, and stores the results in Google Sheets. It exposes an API endpoint to trigger the scraping process and uses a Google Apps Script Web App to manage Google Sheet interactions dynamically.
+
+## Core Components
+
+1.  **Node.js Backend (TypeScript):**
+    *   **`src/server.ts`:** Express.js server providing API endpoints. Handles incoming requests, authentication (API Key), and triggers core logic.
+    *   **`src/index.ts`:** Main application orchestration logic. Called by the server to perform the scraping and processing workflow.
+    *   **`src/env.ts`:** Defines and validates required environment variables using Zod.
+    *   **`src/config/index.ts`:** Exports validated configuration variables for use throughout the application.
+    *   **`src/types/index.ts`:** Defines shared TypeScript interfaces (`CommunityPost`, `ProcessedPost`, `SheetData`, etc.).
+    *   **`src/services/`:** Contains modules for specific tasks:
+        *   **`skoolScraper.ts`:** Uses Puppeteer to log into Skool and scrape post data (content, author, timestamp, URL) from specified community URLs.
+        *   **`geminiService.ts`:** Interacts with the Google GenAI SDK (Gemini API) to analyze scraped posts (identify problems, categories, tags, solutions).
+        *   **`sheetDbService.ts`:** (Consider renaming to `appsScriptService.ts` or similar) Acts as a client to the Google Apps Script Web App, handling all Google Sheet interactions (fetching IDs, saving data, updating status).
+
+2.  **Google Apps Script (Web App):**
+    *   **`Code.gs` (or similar):** Script bound to (or accessing via ID) the target Google Spreadsheet. Deployed as a Web App.
+    *   **Responsibilities:**
+        *   Handles GET requests (e.g., `?action=getIds&sheet=sheetName`) to fetch existing post IDs from a specified sheet.
+        *   Handles POST requests (e.g., `?action=saveData&sheet=sheetName`) to append new rows of data to a specified sheet.
+        *   Handles POST requests (e.g., `?action=updateStatus&sheet=sheetName&postId=...&newStatus=...`) to update the status of a specific post. (Requires adding this action to the script).
+        *   **Dynamically creates sheets:** If a requested sheet name doesn't exist, the script creates it.
+        *   **Ensures headers:** Writes the required header row to newly created sheets.
+
+## Workflows
+
+### Workflow 1: Scrape & Analyze Posts
+
+1.  **Trigger:** External service (e.g., Make.com, cron job via `curl`) sends a `POST` request to `/trigger-scrape` on the Node.js server, including the `X-API-Key` header.
+2.  **Authentication:** `src/server.ts` verifies the `API_KEY`.
+3.  **Initialization:** `src/server.ts` calls the `main` function in `src/index.ts`.
+4.  **Config Reading:** `src/index.ts` reads the list of `SKOOL_COMMUNITY_URLS` from the configuration (`src/config/index.ts` -> `src/env.ts`).
+5.  **Login:** `SkoolScraper` logs into Skool.
+6.  **Community Loop:** The script iterates through each `communityUrl`.
+    *   **Extract Name:** Derives `communityName` (e.g., "nomads") from the URL.
+    *   **Check Sheet & Get IDs:** `SheetDbService` calls the Apps Script Web App (`GET ...?action=getIds&sheet={communityName}`).
+        *   Apps Script (`getSheet_`): Checks if sheet `communityName` exists. If not, creates it and writes `REQUIRED_HEADERS`.
+        *   Apps Script (`getExistingIds_`): Reads the `id` column from the sheet.
+        *   Apps Script (`doGet`): Returns the list of existing IDs as JSON.
+    *   **Scrape:** `SkoolScraper` navigates to the community and scrapes posts.
+    *   **Filter:** `src/index.ts` filters out posts whose IDs already exist in the set returned by Apps Script.
+    *   **Analyze (if new posts):** `GeminiService` processes the *new* posts via the Gemini API.
+    *   **Save (if new posts):** `SheetDbService` calls the Apps Script Web App (`POST ...?action=saveData&sheet={communityName}`), sending the processed data (mapped to the correct array format).
+        *   Apps Script (`getSheet_`): Ensures the sheet exists (it should from the `getIds` call).
+        *   Apps Script (`appendData_`): Appends the new rows to the sheet.
+        *   Apps Script (`doPost`): Returns a success/count message.
+
+### Workflow 2: Generate Posts (Proposed Future)
+
+1.  **Trigger:** New API endpoint (e.g., `/generate-post`) is called.
+2.  **Authentication:** Verify `API_KEY`.
+3.  **Community Loop:** Iterate through `SKOOL_COMMUNITY_URLS`.
+    *   **Fetch Data:** `SheetDbService` calls Apps Script (`GET ...?action=getSheetData&sheet={communityName}`) (New action needed).
+    *   **Filter Unprocessed:** Node.js filters data for rows with `status` = 'New'.
+    *   **Select Post (AI):** `GeminiService` (`selectPostForGeneration`) sends unprocessed data to Gemini, asking it to select *one* post ID based on defined criteria.
+    *   **Generate Content (AI):** `GeminiService` (`generatePostFromSource`) sends the selected post's data to Gemini, asking it to generate new content based on defined goals.
+    *   **Prepare Save:** Node.js prepares the data row for the generated post (using a *new* schema/headers).
+    *   **Save Generated:** `SheetDbService` calls Apps Script (`POST ...?action=saveData&sheet=posts-{communityName}`), sending the generated post data.
+        *   Apps Script (`getSheet_`): Creates `posts-{communityName}` sheet if needed, writes *new* headers for generated posts (requires modification).
+        *   Apps Script (`appendData_`): Appends the generated post.
+    *   **Update Status:** `SheetDbService` calls Apps Script (`POST ...?action=updateStatus&sheet={communityName}&postId={originalId}&newStatus=Processed`) (New action needed).
+        *   Apps Script (`updateStatus`): Finds the original post row and updates its status column.
+
+## Data Storage
+
+*   **Primary:** Google Sheets.
+*   **Management:** Handled exclusively via the deployed Google Apps Script Web App.
+*   **Structure:**
+    *   One sheet per scraped community, named after the community slug (e.g., "nomads"). Headers defined by `REQUIRED_HEADERS` in Apps Script.
+    *   (Future) One sheet per community for *generated* posts, named `posts-[communityName]`. Headers TBD.
+
+## Authentication & Security
+
+*   **API Endpoint:** `API_KEY` environment variable required in `X-API-Key` header for all trigger endpoints.
+*   **Skool:** Credentials (`SKOOL_EMAIL`, `SKOOL_PASSWORD`) stored in `.env`.
+*   **Gemini:** API Key (`GEMINI_API_KEY`) stored in `.env`.
+*   **Apps Script:** Deployed as "Execute as: Me", "Who has access: Anyone". Security relies on the unguessable URL and the API Key check in the Node.js server.
+
+## Conventions
+
+*   Environment variables are loaded from `.env` and validated/typed via Zod in `src/env.ts`. Config is exported from `src/config/index.ts`.
+*   All Google Sheet interactions **must** go through the `SheetDbService` (or its successor) which calls the Apps Script Web App. Direct SheetDB API usage is removed.
+*   Use the `status` column in the original community sheets to track processing state ('New' -> 'Processed').
+*   Service classes encapsulate external interactions (Skool, Gemini, Apps Script).
