@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node dist/server.js",
     "build": "tsc",
+    "render-build": "npm install && npm run build",
     "dev": "ts-node-dev --respawn src/server.ts",
     "test:login": "ts-node src/testLogin.ts",
     "test": "echo \"Error: no test specified\" && exit 1"

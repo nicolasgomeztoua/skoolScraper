@@ -12,7 +12,7 @@ const envSchema = z.object({
   // Skool Communities (comma-separated string, will be processed later)
   SKOOL_COMMUNITY_URLS: z.string()
     .min(1, { message: "SKOOL_COMMUNITY_URLS cannot be empty" })
-    .refine(urls => urls.split(',').every(url => url.trim().startsWith('https')), {
+    .refine((urls: string) => urls.split(',').every((url: string) => url.trim().startsWith('https')), {
       message: "All SKOOL_COMMUNITY_URLS must be valid HTTPS URLs",
     }),
   

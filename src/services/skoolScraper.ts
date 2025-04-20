@@ -131,16 +131,22 @@ export class SkoolScraper {
           const contentElement = await postElement.$(SELECTORS.content);
           // Use type assertion within evaluate for textContent
           const content = contentElement ? await contentElement.evaluate((el: Element) => (el as HTMLElement).textContent?.trim()) : '';
+          
+          // Check postId and link explicitly before using them to ensure they are strings
+          if (!postId || typeof postId !== 'string') {
+              console.warn('Skipping post due to missing or invalid post ID (link).');
+              continue;
+          }
 
           scrapedPosts.push({
-            id: postId,
+            id: postId, // Now guaranteed to be a string
             communityUrl: communityUrl,
             author: authorName || 'Unknown Author',
             timestamp: timestamp || 'Unknown Time',
             content: content || '',
-            url: link
+            url: postId // Use postId here as it's the same value and now guaranteed to be a string
           });
-          processedPostIds.add(postId);
+          processedPostIds.add(postId); // Now guaranteed to be a string
           postsAddedInThisScroll++;
           // console.log(`Added post: ${postId} (Total: ${scrapedPosts.length})`); // Reduced console noise
 
