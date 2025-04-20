@@ -1,0 +1,21 @@
+# Ignore node_modules, as dependencies will be installed inside the container
+node_modules
+
+# Ignore build output directory, as it will be generated inside the container
+dist
+
+# Ignore environment files - these should be injected at runtime
+.env*
+
+# Ignore Docker files themselves
+Dockerfile
+.dockerignore
+
+# Ignore Git directory
+.git
+.gitignore
+
+# Ignore development/test artifacts if any
+npm-debug.log
+*.log
+error_*.png 
