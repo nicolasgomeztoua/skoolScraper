@@ -1,0 +1,30 @@
+{
+  "name": "communityscraper",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc",
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "test:login": "ts-node src/testLogin.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["scraper", "skool", "community", "gemini", "ai"],
+  "author": "",
+  "license": "ISC",
+  "description": "A tool to scrape skool.com community posts, process them with Gemini AI, and store results in Google Sheets.",
+  "dependencies": {
+    "@google-cloud/local-auth": "^2.1.0",
+    "@google/generative-ai": "^0.1.1",
+    "@types/node": "^20.9.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "googleapis": "^128.0.0",
+    "puppeteer": "^21.5.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  },
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0"
+  }
+}
